@@ -74,7 +74,7 @@ if [[ -z "$environment" ]]; then
     environment=$(curl -X POST "$DEFECTDOJO_URL/api/v2/development_environments/" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" -H "Content-Type: application/json" -d "$JSON" | jq -r '.name')
 fi
 
-IFS=',' read -r -a testsArray <<< "$DEFECTDOJO_TOOLS"
+IFS=', ' read -r -a testsArray <<< "$DEFECTDOJO_TOOLS"
 for testName in "${testsArray[@]}"; do
     sonarApiScan=""
     testID=$(curl -X GET "$DEFECTDOJO_URL/api/v2/test_types/?name=${testName// /%20}" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" -H "Content-Type: application/json" | jq -r '.results' | jq -r '.[].id')
@@ -125,9 +125,9 @@ for testName in "${testsArray[@]}"; do
     if ! [[ -z "$test" ]]; then
         $(curl -X DELETE "$DEFECTDOJO_URL/api/v2/tests/$test/" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" )
     fi
-    report=$( echo $DEFECTDOJO_REPORTS | jq -r --arg var "$testName" '.[$var]')
-    if [[ $report == null ]]; then
-        if [[ -z "$sonarApiScan" || $sonarApiScan == "" ]]; then
+    report=$( echo $DEFECTDOJO_REPORTS | jq -r --arg testName "$testName" '.[$testName]')
+    if [[ "$report" = null ]]; then
+        if [[ -z "$sonarApiScan" || $sonarApiScan = "" ]]; then
             echo 'ERROR: You need to specify the report! As JSON {"Acunetix Scan": "report.json"}! Do not forget to check supported format'
             exit 1
         else
