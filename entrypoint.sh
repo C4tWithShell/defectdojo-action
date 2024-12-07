@@ -34,8 +34,7 @@ then
 fi
 
 productType=$(curl -X GET "$DEFECTDOJO_URL/api/v2/product_types/?name=$DEFECTDOJO_PRODUCT_TYPE" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" -H "Content-Type: application/json" | jq -r '.results' | jq -r '.[0].id')
-
-if [[ -z "$productType" ]]; then
+if [[ -z "$productType" || $productType == null ]]; then
     echo "Product Type does not exist! You need to create it in DefectDojo or specify the valid value"
     exit 1
 fi
@@ -43,7 +42,7 @@ fi
 
 product=$(curl -X GET "$DEFECTDOJO_URL/api/v2/products/?name=$DEFECTDOJO_PRODUCT" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" -H "Content-Type: application/json" | jq -r '.results' | jq -r '.[0].id')
 
-if [[ -z "$product" ]]; then
+if [[ -z "$product" || $product == null ]]; then
     echo "Creating product $DEFECTDOJO_PRODUCT in DefectDojo"
     JSON='{"name": "'$DEFECTDOJO_PRODUCT'", "description": "Project '$DEFECTDOJO_PRODUCT'", "prod_type": "'$productType'"}'
     JSON=$(echo "$JSON" | sed -e 's/,}/}/g')
@@ -53,7 +52,7 @@ fi
 
 engagement=$(curl -X GET "$DEFECTDOJO_URL/api/v2/engagements/?name=$DEFECTDOJO_ENGAGEMENT&product=$product" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" -H "Content-Type: application/json" | jq -r '.results' | jq -r '.[0].id')
 
-if [[ -z "$engagement" ]]; then
+if [[ -z "$engagement" || $engagement == null ]]; then
     echo "Creating engagement $DEFECTDOJO_ENGAGEMENT for product $DEFECTDOJO_PRODUCT in DefectDojo"
     start_date=$(date '+%Y-%m-%d')
     end_date=$(date '+%Y-%m-%d' -d '+21 days')
@@ -65,7 +64,7 @@ if [[ -z "$engagement" ]]; then
 fi
 
 environment=$(curl -X GET "$DEFECTDOJO_URL/api/v2/development_environments/" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" -H "Content-Type: application/json" | jq -r '.results' | jq -r 'first(.[].name)')
-if [[ -z "$environment" ]]; then
+if [[ -z "$environment" || $environment == null ]]; then
     echo "Creating $DEFECTDOJO_ENVIRONMENT environment"
 
     JSON='{"name": "'$DEFECTDOJO_ENVIRONMENT'"}'
@@ -78,14 +77,14 @@ IFS=',' read -r -a testsArray <<< "$DEFECTDOJO_TOOLS"
 for testName in "${testsArray[@]}"; do
     sonarApiScan=""
     testID=$(curl -X GET "$DEFECTDOJO_URL/api/v2/test_types/?name=${testName// /%20}" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" -H "Content-Type: application/json" | jq -r '.results' | jq -r '.[0].id')
-    if [[ -z "$testID" ]]; then
+    if [[ -z "$testID" || $testID == null ]]; then
         echo "Test $testName does not exist! Check you configuration"
         exit 1
     fi
-    echo "$testName with id $testID"
+    echo "Integrating the $testName test with id $testID"
     if [ "$testName" = 'SonarQube API Import' ]; then
         sonarTool=$(curl -X GET "$DEFECTDOJO_URL/api/v2/tool_configurations/?name=SonarQube" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" -H "Content-Type: application/json" | jq -r '.results' | jq -r '.[0].id')
-        if [ -z "$sonarTool" ]; then
+        if [[ -z "$sonarTool" || sonarTool == null ]]; then
             echo "ERROR: There is no configured SonarQube tool!"
             exit 1
         fi
@@ -94,13 +93,12 @@ for testName in "${testsArray[@]}"; do
             exit 1
         fi
         sonarApiScan=$(curl -X GET "$DEFECTDOJO_URL/api/v2/product_api_scan_configurations/?product=$product&service_key_1=$DEFECTDOJO_SONAR_KEY" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" -H "Content-Type: application/json" | jq -r '.results' | jq -r '.[0].id')
-        if [ -z "$sonarApiScan" ]; then
+        if [[ -z "$sonarApiScan" || $sonarApiScan == null ]]; then
             echo "Creating SonarQube API scan for $DEFECTDOJO_PRODUCT product"
 
             JSON='{"service_key_1": "'$DEFECTDOJO_SONAR_KEY'", "tool_configuration":"'$sonarTool'", "product": "'$product'"}'
             JSON=$(echo "$JSON" | sed -e 's/,}/}/g')
             sonarApiScan=$(curl -X POST "$DEFECTDOJO_URL/api/v2/product_api_scan_configurations/" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" -H "Content-Type: application/json" -d "$JSON" | jq -r '.id')
-            echo $sonarApiScan
         fi
     fi
     if [ "$testName" = 'Github Vulnerability Scan' ]; then
@@ -122,7 +120,7 @@ for testName in "${testsArray[@]}"; do
                     > github.json)
     fi
     test=$(curl -X GET "$DEFECTDOJO_URL/api/v2/tests/?title=${testName// /%20}&engagement=$engagement" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" -H "Content-Type: application/json" | jq -r '.results' | jq -r '.[0].id')
-    if ! [[ -z "$test" ]]; then
+    if ! [[ -z "$test" || $test == null ]]; then
         $(curl -X DELETE "$DEFECTDOJO_URL/api/v2/tests/$test/" -H "Authorization: Token $DEFECTDOJO_TOKEN" -H "accept: application/json" )
     fi
     report=$( echo $DEFECTDOJO_REPORTS | jq -r --arg var "$testName" '.[$var]')
